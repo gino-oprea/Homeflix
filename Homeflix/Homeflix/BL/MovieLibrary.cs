@@ -45,12 +45,17 @@ namespace Homeflix.BL
         public List<Movie> GetLibraryMovies()
         {
             LoadConfig();
-            if (playerConfig?.Movies?.Count > 0)
+            if (playerConfig?.Movies != null)
                 return playerConfig.Movies;
 
             return null;
         }
 
+        public void RemoveMovieFromLibrary(Movie movie)
+        {
+            playerConfig?.Movies?.Remove(movie);
+            UpdateConfig();
+        }
         public void AddMovieToLibrary(string movieSeriesName, string rootFolderPath)
         {
             Movie movie = new Movie();

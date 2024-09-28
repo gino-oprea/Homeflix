@@ -2,8 +2,6 @@
 using Homeflix.Models;
 
 CancellationTokenSource cancellationTokenSource = new CancellationTokenSource();
-
-
 MovieLibrary movieLibrary = new MovieLibrary();
 MoviePlayer moviePlayer = null;
 Movie currentMovie = null;
@@ -30,36 +28,49 @@ Console.ReadKey();
 
 void RunProgram()
 {
-    if (!movieLibrary.ConfigExists)
+    while (true)
     {
-        string vlcPlayerLocation = InterogateUser("Set VLC player folder path where the .exe file is located:", null);
-        movieLibrary.InitializeConfig(vlcPlayerLocation);
+        if (!movieLibrary.ConfigExists)
+        {
+            string vlcPlayerLocation = InterogateUser("Set VLC player folder path where the .exe file is located:", null);
+            movieLibrary.InitializeConfig(vlcPlayerLocation);
 
-        moviePlayer = new MoviePlayer(movieLibrary.GetVlcPlayerLocation());
-        AddNewMovieToLibrary();
-    }
-    else
-    {
-        moviePlayer = new MoviePlayer(movieLibrary.GetVlcPlayerLocation());
-        List<Movie> libraryMovies = movieLibrary.GetLibraryMovies();
-        ChooseWhatToDo(libraryMovies);
+            moviePlayer = new MoviePlayer(movieLibrary.GetVlcPlayerLocation());
+            AddNewMovieToLibrary();
+        }
+        else
+        {
+            moviePlayer = new MoviePlayer(movieLibrary.GetVlcPlayerLocation());
+            List<Movie> libraryMovies = movieLibrary.GetLibraryMovies();
+            ChooseWhatToDo(libraryMovies);
+        }
     }
 }
 
-void PlayMovie(Movie movie)
+void ManageMovie(Movie movie)
 {
-    string resumeAnswer = InterogateUser("Resume from where you left off(Y/N):", new List<string> { "Y", "N" });
-    if (resumeAnswer.Trim().ToUpper() == "Y")
+    vlcCommunicationRetryCount = 0;
+
+    string manageMovieAnswer = InterogateUser($"Play or Remove {movie.Name} from library (P/R):", new List<string> { "P", "R" });
+    if (manageMovieAnswer.ToUpper() == "R")
     {
-        //resume play        
-        PlayEpisode(movie);
+        movieLibrary.RemoveMovieFromLibrary(movie);
     }
     else
     {
-        //play specific episode from begining
-        string episodeAnswer = InterogateUser("Which episode do you want to play?(ex:s2e4):", null);
-        movie.LastEpisodePlayed = new LastEpisodePlayed { Episode = episodeAnswer, Time = 0 };
-        PlayEpisode(movie);
+        string resumeAnswer = InterogateUser("Resume from where you left off(Y/N):", new List<string> { "Y", "N" });
+        if (resumeAnswer.Trim().ToUpper() == "Y")
+        {
+            //resume play        
+            PlayEpisode(movie);
+        }
+        else
+        {
+            //play specific episode from begining
+            string episodeAnswer = InterogateUser("Which episode do you want to play?(ex:s2e4):", null);
+            movie.LastEpisodePlayed = new LastEpisodePlayed { Episode = episodeAnswer, Time = 0 };
+            PlayEpisode(movie);
+        }
     }
 }
 
@@ -141,8 +152,7 @@ void ChooseWhatToDo(List<Movie> libraryMovies = null)
     if (answer == "0")
         AddNewMovieToLibrary();
     else
-        PlayMovie(libraryMovies[Convert.ToInt32(answer) - 1]);
-
+        ManageMovie(libraryMovies[Convert.ToInt32(answer) - 1]);
 
     while (vlcCheckStatusRunning)
     {
@@ -151,7 +161,6 @@ void ChooseWhatToDo(List<Movie> libraryMovies = null)
 
         Thread.Sleep(2000);
     }
-    ChooseWhatToDo();
 }
 
 void AddNewMovieToLibrary()
@@ -202,7 +211,7 @@ async Task ManageCurrentPlayback()
     {
         vlcCommunicationRetryCount++;       
 
-        if(vlcCommunicationRetryCount > 2)
+        if(vlcCommunicationRetryCount > 1)
         {            
             StopPeriodicTask();            
         }
