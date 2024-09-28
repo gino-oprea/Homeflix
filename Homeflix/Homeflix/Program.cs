@@ -8,6 +8,7 @@ MovieLibrary movieLibrary = new MovieLibrary();
 MoviePlayer moviePlayer = null;
 Movie currentMovie = null;
 var vlcClient = new VlcApiClient();
+bool vlcCheckStatusRunning = false;
 
 int vlcCommunicationRetryCount = 0;
 
@@ -24,9 +25,8 @@ catch(Exception ex)
     RunProgram();
 }
 
+Console.ReadKey();
 
-
-Console.ReadLine();
 
 void RunProgram()
 {
@@ -35,13 +35,15 @@ void RunProgram()
         string vlcPlayerLocation = InterogateUser("Set VLC player folder path where the .exe file is located:", null);
         movieLibrary.InitializeConfig(vlcPlayerLocation);
 
+        moviePlayer = new MoviePlayer(movieLibrary.GetVlcPlayerLocation());
         AddNewMovieToLibrary();
     }
-
-    moviePlayer = new MoviePlayer(movieLibrary.GetVlcPlayerLocation());
-
-    List<Movie> libraryMovies = movieLibrary.GetLibraryMovies();
-    ChooseWhatToDo(libraryMovies);    
+    else
+    {
+        moviePlayer = new MoviePlayer(movieLibrary.GetVlcPlayerLocation());
+        List<Movie> libraryMovies = movieLibrary.GetLibraryMovies();
+        ChooseWhatToDo(libraryMovies);
+    }
 }
 
 void PlayMovie(Movie movie)
@@ -79,9 +81,12 @@ void PlayEpisode(Movie movie)
         }
         else
         {
-            Console.WriteLine("Episode does not exist");
+            Console.WriteLine("Episode does not exist");            
             StopPeriodicTask();
-            ChooseWhatToDo();
+
+            //reload movies with correct lastEpisodePlayed
+            List<Movie> libraryMovies = movieLibrary.GetLibraryMovies();
+            ChooseWhatToDo(libraryMovies);
         }
     }
     else
@@ -137,6 +142,16 @@ void ChooseWhatToDo(List<Movie> libraryMovies = null)
         AddNewMovieToLibrary();
     else
         PlayMovie(libraryMovies[Convert.ToInt32(answer) - 1]);
+
+
+    while (vlcCheckStatusRunning)
+    {
+        if (vlcCommunicationRetryCount > 0)
+            Console.WriteLine("Vlc api not responding...");
+
+        Thread.Sleep(2000);
+    }
+    ChooseWhatToDo();
 }
 
 void AddNewMovieToLibrary()
@@ -185,15 +200,11 @@ async Task ManageCurrentPlayback()
 
     if (currentTime == null)
     {
-        vlcCommunicationRetryCount++;
-        Console.WriteLine("Vlc api not responding...");
+        vlcCommunicationRetryCount++;       
 
         if(vlcCommunicationRetryCount > 2)
-        {
-            //restart whole process
-            StopPeriodicTask();
-            Thread.Sleep(2500);
-            RunProgram();
+        {            
+            StopPeriodicTask();            
         }
     }
     else
@@ -224,6 +235,7 @@ async Task StartPeriodicTask()
     cancellationTokenSource = new CancellationTokenSource();
     CancellationToken token = cancellationTokenSource.Token;
 
+    vlcCheckStatusRunning = true;
     try
     {
         while (!token.IsCancellationRequested)
@@ -236,6 +248,10 @@ async Task StartPeriodicTask()
     catch (TaskCanceledException)
     {
         Console.WriteLine("Periodic task was canceled.");
+    }
+    finally
+    {
+        vlcCheckStatusRunning = false;
     }
 }
 

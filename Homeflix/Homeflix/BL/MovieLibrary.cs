@@ -44,6 +44,7 @@ namespace Homeflix.BL
         }
         public List<Movie> GetLibraryMovies()
         {
+            LoadConfig();
             if (playerConfig?.Movies?.Count > 0)
                 return playerConfig.Movies;
 
