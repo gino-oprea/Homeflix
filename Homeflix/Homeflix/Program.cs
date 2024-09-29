@@ -7,6 +7,7 @@ MoviePlayer moviePlayer = null;
 Movie currentMovie = null;
 var vlcClient = new VlcApiClient();
 bool vlcCheckStatusRunning = false;
+int vlcStatusCheckInterval = 2000;
 
 int vlcCommunicationRetryCount = 0;
 
@@ -42,7 +43,13 @@ void RunProgram()
         {
             moviePlayer = new MoviePlayer(movieLibrary.GetVlcPlayerLocation());
             List<Movie> libraryMovies = movieLibrary.GetLibraryMovies();
-            ChooseWhatToDo(libraryMovies);
+            ChooseWhatToDo(libraryMovies);            
+        }
+
+        while (vlcCheckStatusRunning)
+        {
+            //delay menu until playback is over otherwise the moviePlayer gets a new reference and the playback breaks
+            Thread.Sleep(100);
         }
     }
 }
@@ -62,19 +69,19 @@ void ManageMovie(Movie movie)
         if (resumeAnswer.Trim().ToUpper() == "Y")
         {
             //resume play        
-            PlayEpisode(movie);
+            CheckAndPlayEpisode(movie);
         }
         else
         {
             //play specific episode from begining
             string episodeAnswer = InterogateUser("Which episode do you want to play?(ex:s2e4):", null);
             movie.LastEpisodePlayed = new LastEpisodePlayed { Episode = episodeAnswer, Time = 0 };
-            PlayEpisode(movie);
+            CheckAndPlayEpisode(movie);
         }
     }
 }
 
-void PlayEpisode(Movie movie)
+void CheckAndPlayEpisode(Movie movie)
 {
     if (movie.LastEpisodePlayed != null)
     {
@@ -82,34 +89,37 @@ void PlayEpisode(Movie movie)
         int seasonIndex = Convert.ToInt32(stringParts[0]) - 1;
         int episodeIndex = Convert.ToInt32(stringParts[1]) - 1;
 
-        if (movie.Seasons.Count > seasonIndex && movie.Seasons[seasonIndex].Episodes.Count > episodeIndex)
+        if (movie.Seasons.Count <= seasonIndex || movie.Seasons[seasonIndex].Episodes.Count <= episodeIndex)
         {
-            Console.WriteLine($"Playing {movie.Name} {movie.Seasons[seasonIndex].Name} {movie.Seasons[seasonIndex].Episodes[episodeIndex].Name}");
-            moviePlayer.Play(movie.Seasons[seasonIndex].Episodes[episodeIndex].Path, movie.LastEpisodePlayed.Time);
-
-            Thread.Sleep(1000);
-            StartPeriodicVlcStatusCheck();
-        }
-        else
-        {
-            Console.WriteLine("Episode does not exist");            
-            StopPeriodicTask();
+            Console.WriteLine("Episode does not exist");
+            StopPeriodicVlcStatusCheck();
 
             //reload movies with correct lastEpisodePlayed
             List<Movie> libraryMovies = movieLibrary.GetLibraryMovies();
             ChooseWhatToDo(libraryMovies);
+        }
+        else
+        {
+            Console.WriteLine($"Playing {movie.Name} {movie.Seasons[seasonIndex].Name} {movie.Seasons[seasonIndex].Episodes[episodeIndex].Name}");
+            Play(movie, movie.Seasons[seasonIndex].Episodes[episodeIndex].Path, movie.LastEpisodePlayed.Time);                        
         }
     }
     else
     {
         movie.LastEpisodePlayed = new LastEpisodePlayed() { Episode = "s1e1", Time = 0 };
         Console.WriteLine($"Playing {movie.Name} {movie.Seasons[0].Name} {movie.Seasons[0].Episodes[0].Name}");
-        moviePlayer.Play(movie.Seasons[0].Episodes[0].Path, 0);
-        Thread.Sleep(1000);
-        StartPeriodicVlcStatusCheck();
-    }
 
+        Play(movie, movie.Seasons[0].Episodes[0].Path, 0);                
+    }    
+}
+
+void Play(Movie movie, string filePath, int time)
+{
+    moviePlayer.Play(filePath, time);
     currentMovie = movie;
+
+    Thread.Sleep(vlcStatusCheckInterval);
+    StartPeriodicVlcStatusCheck();
 }
 
 void ChooseWhatToDo(List<Movie> libraryMovies = null)
@@ -133,15 +143,7 @@ void ChooseWhatToDo(List<Movie> libraryMovies = null)
     if (answer == "0")
         AddNewMovieToLibrary();
     else
-        ManageMovie(libraryMovies[Convert.ToInt32(answer) - 1]);
-
-    while (vlcCheckStatusRunning)
-    {
-        if (vlcCommunicationRetryCount > 0)
-            Console.WriteLine("Vlc api not responding...");
-
-        Thread.Sleep(2000);
-    }
+        ManageMovie(libraryMovies[Convert.ToInt32(answer) - 1]);   
 }
 
 void AddNewMovieToLibrary()
@@ -189,11 +191,12 @@ async Task ManageCurrentPlayback()
 
     if (currentTime == null)
     {
-        vlcCommunicationRetryCount++;       
+        vlcCommunicationRetryCount++;
+        Console.WriteLine($"Vlc api not responding");
 
-        if(vlcCommunicationRetryCount > 1)
-        {            
-            StopPeriodicTask();            
+        if (vlcCommunicationRetryCount >= 2)
+        {
+            StopPeriodicVlcStatusCheck();            
         }
     }
     else
@@ -208,7 +211,7 @@ async Task ManageCurrentPlayback()
             LastEpisodePlayed lastEpisodePlayed = new LastEpisodePlayed() { Episode = episodeCode, Time = 0 };
             currentMovie.LastEpisodePlayed = lastEpisodePlayed;
             movieLibrary.UpdateLastEpisodePlayed(currentMovie);
-            PlayEpisode(currentMovie);
+            CheckAndPlayEpisode(currentMovie);
         }
         else
         {
@@ -224,6 +227,9 @@ async Task ManageCurrentPlayback()
 
 async Task StartPeriodicVlcStatusCheck()
 {
+    if (vlcCheckStatusRunning)//same task already running
+        return;
+
     cancellationTokenSource = new CancellationTokenSource();
     CancellationToken token = cancellationTokenSource.Token;
 
@@ -233,13 +239,15 @@ async Task StartPeriodicVlcStatusCheck()
         while (!token.IsCancellationRequested)
         {
             await ManageCurrentPlayback();            
-            // Wait for 5 seconds
-            await Task.Delay(TimeSpan.FromSeconds(2), token);
+            // Wait a few seconds
+            await Task.Delay(vlcStatusCheckInterval);
         }
-    }
-    catch (TaskCanceledException)
-    {
+
         Console.WriteLine("Periodic vlc status check was canceled.");
+    }
+    catch (Exception ex)
+    {        
+        Console.WriteLine($"Error: {ex.Message} {ex.StackTrace}");
     }
     finally
     {
@@ -247,7 +255,7 @@ async Task StartPeriodicVlcStatusCheck()
     }
 }
 
-void StopPeriodicTask()
+void StopPeriodicVlcStatusCheck()
 {
     cancellationTokenSource?.Cancel();    
 }
