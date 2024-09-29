@@ -112,25 +112,6 @@ void PlayEpisode(Movie movie)
     currentMovie = movie;
 }
 
-string GetNextEpisode(Movie movie)
-{
-    string[] stringParts = movie.LastEpisodePlayed.Episode.Split(new char[] { 's', 'e' }, StringSplitOptions.RemoveEmptyEntries);
-    int seasonIndex = Convert.ToInt32(stringParts[0]) - 1;
-    int episodeIndex = Convert.ToInt32(stringParts[1]) - 1;    
-
-    if (movie.Seasons.Count > seasonIndex && movie.Seasons[seasonIndex].Episodes.Count > episodeIndex + 1)//another episode exists in current season
-    {
-        return $"s{stringParts[0]}e{Convert.ToInt32(stringParts[1]) + 1}";
-    }
-
-    if (movie.Seasons.Count > seasonIndex + 1)//another season exists
-    {
-        return $"s{Convert.ToInt32(stringParts[0]) + 1}e1";
-    }
-
-    return "s1e1";//start over
-}
-
 void ChooseWhatToDo(List<Movie> libraryMovies = null)
 {
     if (libraryMovies == null)
@@ -200,12 +181,11 @@ string InterogateUser(string question, List<string> validAnswers)
     return response;
 }
 
-
 async Task ManageCurrentPlayback()
 {
     //call vlc api and get current time and update currentmovie.lastepisodeplayed time
     //also check if it needs to jump to the next episode(stop player and restart it with the new episode and update the currentmovie.lastepisodeplayed)
-    var (currentTime, maxLength) = await vlcClient.GetPlaybackStatusAsync();
+    var (currentTime, maxLength, fileNamePlaying) = await vlcClient.GetPlaybackStatusAsync();
 
     if (currentTime == null)
     {
@@ -224,7 +204,7 @@ async Task ManageCurrentPlayback()
         if (currentTime > maxLength - 20)//20 seconds left jump to next episode
         {
             moviePlayer.Stop();
-            string episodeCode = GetNextEpisode(currentMovie);
+            string episodeCode = movieLibrary.GetNextEpisode(currentMovie);
             LastEpisodePlayed lastEpisodePlayed = new LastEpisodePlayed() { Episode = episodeCode, Time = 0 };
             currentMovie.LastEpisodePlayed = lastEpisodePlayed;
             movieLibrary.UpdateLastEpisodePlayed(currentMovie);
@@ -232,12 +212,15 @@ async Task ManageCurrentPlayback()
         }
         else
         {
+            string episodeCodePlaying = movieLibrary.GetEpisodeCode(fileNamePlaying);
+            if (episodeCodePlaying.Trim() != "")
+                currentMovie.LastEpisodePlayed.Episode = episodeCodePlaying;
+
             currentMovie.LastEpisodePlayed.Time = currentTime.Value;
             movieLibrary.UpdateLastEpisodePlayed(currentMovie);
         }
     }
 }
-
 
 async Task StartPeriodicVlcStatusCheck()
 {

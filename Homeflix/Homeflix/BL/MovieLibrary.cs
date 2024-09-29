@@ -50,7 +50,44 @@ namespace Homeflix.BL
 
             return null;
         }
+        public string GetNextEpisode(Movie movie)
+        {
+            string[] stringParts = movie.LastEpisodePlayed.Episode.Split(new char[] { 's', 'e' }, StringSplitOptions.RemoveEmptyEntries);
+            int seasonIndex = Convert.ToInt32(stringParts[0]) - 1;
+            int episodeIndex = Convert.ToInt32(stringParts[1]) - 1;
 
+            if (movie.Seasons.Count > seasonIndex && movie.Seasons[seasonIndex].Episodes.Count > episodeIndex + 1)//another episode exists in current season
+            {
+                return $"s{stringParts[0]}e{Convert.ToInt32(stringParts[1]) + 1}";
+            }
+
+            if (movie.Seasons.Count > seasonIndex + 1)//another season exists
+            {
+                return $"s{Convert.ToInt32(stringParts[0]) + 1}e1";
+            }
+
+            return "s1e1";//start over
+        }
+        public string GetEpisodeCode(string fileName)
+        {
+            string episodeCode = "";
+            for (int i = 0; i < playerConfig.Movies.Count; i++)            
+            {
+                Movie movie = playerConfig.Movies[i];
+                for (int j = 0; j < movie.Seasons.Count; j++)                
+                {
+                    Season season = movie.Seasons[j];
+                    var epIndex = season.Episodes.FindIndex(e => e.Name == fileName);
+                    if (epIndex>-1)
+                    {
+                        episodeCode = $"s{j + 1}e{epIndex + 1}";
+                        return episodeCode;
+                    }
+                }
+            }
+
+            return episodeCode;
+        }
         public void RemoveMovieFromLibrary(Movie movie)
         {
             playerConfig?.Movies?.Remove(movie);

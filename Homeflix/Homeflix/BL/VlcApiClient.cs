@@ -19,7 +19,7 @@ namespace Homeflix.BL
             _httpClient = new HttpClient();
         }
 
-        public async Task<(int? CurrentTime, int? MaxLength)> GetPlaybackStatusAsync()
+        public async Task<(int? CurrentTime, int? MaxLength, string FileName)> GetPlaybackStatusAsync()
         {
             try
             {
@@ -32,7 +32,7 @@ namespace Homeflix.BL
                 // If the response is not successful, return default TimeSpan values
                 if (!response.IsSuccessStatusCode)
                 {
-                    return (null, null);
+                    return (null, null, null);
                 }
 
                 // Read the response content as a string
@@ -43,16 +43,24 @@ namespace Homeflix.BL
                 var currentTimeElement = xml.Root.Element("time");
                 var maxLengthElement = xml.Root.Element("length");
 
+                // Extract the filename from the 'category' with name 'meta' and 'info' where 'name' is 'filename'
+                var filenameElement = xml.Descendants("category")
+                                         .Where(c => (string)c.Attribute("name") == "meta")
+                                         .Descendants("info")
+                                         .Where(i => (string)i.Attribute("name") == "filename")
+                                         .FirstOrDefault();
+
                 // Parse the time values
                 var currentTime = int.Parse(currentTimeElement?.Value ?? null);
                 var maxLength = int.Parse(maxLengthElement?.Value ?? null);
+                var filename = filenameElement?.Value ?? "";
 
-                return (currentTime, maxLength);
+                return (currentTime, maxLength, filename);
             }
             catch (Exception)
             {
                 // Return default TimeSpan values in case of an exception
-                return (null, null);
+                return (null, null, null);
             }
         }
     }
