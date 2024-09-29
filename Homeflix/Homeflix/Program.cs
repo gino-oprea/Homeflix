@@ -13,7 +13,7 @@ int vlcCommunicationRetryCount = 0;
 
 try
 {    
-    RunProgram();
+    await RunProgram();
 }
 catch(Exception ex)
 {
@@ -21,13 +21,13 @@ catch(Exception ex)
 
     Console.WriteLine("There was an error please try again...");
 
-    RunProgram();
+    await RunProgram();
 }
 
 Console.ReadKey();
 
 
-void RunProgram()
+async Task RunProgram()
 {
     while (true)
     {
@@ -37,24 +37,24 @@ void RunProgram()
             movieLibrary.InitializeConfig(vlcPlayerLocation);
 
             moviePlayer = new MoviePlayer(movieLibrary.GetVlcPlayerLocation());
-            AddNewMovieToLibrary();
+            await AddNewMovieToLibrary();
         }
         else
         {
             moviePlayer = new MoviePlayer(movieLibrary.GetVlcPlayerLocation());
             List<Movie> libraryMovies = movieLibrary.GetLibraryMovies();
-            ChooseWhatToDo(libraryMovies);            
+            await ChooseWhatToDo(libraryMovies);            
         }
 
         while (vlcCheckStatusRunning)
         {
-            //delay menu until playback is over otherwise the moviePlayer gets a new reference and the playback breaks
-            Thread.Sleep(100);
+            //delay menu until playback is over otherwise the moviePlayer gets a new reference and the playback breaks            
+            await Task.Delay(100);
         }
     }
 }
 
-void ManageMovie(Movie movie)
+async Task ManageMovie(Movie movie)
 {
     vlcCommunicationRetryCount = 0;
 
@@ -69,19 +69,19 @@ void ManageMovie(Movie movie)
         if (resumeAnswer.Trim().ToUpper() == "Y")
         {
             //resume play        
-            CheckAndPlayEpisode(movie);
+            await CheckAndPlayEpisode(movie);
         }
         else
         {
             //play specific episode from begining
             string episodeAnswer = InterogateUser("Which episode do you want to play?(ex:s2e4):", null);
             movie.LastEpisodePlayed = new LastEpisodePlayed { Episode = episodeAnswer, Time = 0 };
-            CheckAndPlayEpisode(movie);
+            await CheckAndPlayEpisode(movie);
         }
     }
 }
 
-void CheckAndPlayEpisode(Movie movie)
+async Task CheckAndPlayEpisode(Movie movie)
 {
     if (movie.LastEpisodePlayed != null)
     {
@@ -96,12 +96,12 @@ void CheckAndPlayEpisode(Movie movie)
 
             //reload movies with correct lastEpisodePlayed
             List<Movie> libraryMovies = movieLibrary.GetLibraryMovies();
-            ChooseWhatToDo(libraryMovies);
+            await ChooseWhatToDo(libraryMovies);
         }
         else
         {
             Console.WriteLine($"Playing {movie.Name} {movie.Seasons[seasonIndex].Name} {movie.Seasons[seasonIndex].Episodes[episodeIndex].Name}");
-            Play(movie, movie.Seasons[seasonIndex].Episodes[episodeIndex].Path, movie.LastEpisodePlayed.Time);                        
+            await Play(movie, movie.Seasons[seasonIndex].Episodes[episodeIndex].Path, movie.LastEpisodePlayed.Time);                        
         }
     }
     else
@@ -109,20 +109,21 @@ void CheckAndPlayEpisode(Movie movie)
         movie.LastEpisodePlayed = new LastEpisodePlayed() { Episode = "s1e1", Time = 0 };
         Console.WriteLine($"Playing {movie.Name} {movie.Seasons[0].Name} {movie.Seasons[0].Episodes[0].Name}");
 
-        Play(movie, movie.Seasons[0].Episodes[0].Path, 0);                
+        await Play(movie, movie.Seasons[0].Episodes[0].Path, 0);                
     }    
 }
 
-void Play(Movie movie, string filePath, int time)
+async Task Play(Movie movie, string filePath, int time)
 {
     moviePlayer.Play(filePath, time);
     currentMovie = movie;
-
-    Thread.Sleep(vlcStatusCheckInterval);
+    
+    await Task.Delay(vlcStatusCheckInterval);//allow vlc player to start before making periodical api calls
     StartPeriodicVlcStatusCheck();
+    await Task.Delay(500);//allow time for the vlcCheckStatusRunning flag to be set
 }
 
-void ChooseWhatToDo(List<Movie> libraryMovies = null)
+async Task ChooseWhatToDo(List<Movie> libraryMovies = null)
 {
     if (libraryMovies == null)
         libraryMovies = movieLibrary.GetLibraryMovies();
@@ -141,12 +142,12 @@ void ChooseWhatToDo(List<Movie> libraryMovies = null)
     string answer = InterogateUser(moviesQuestion, validAnswers);    
 
     if (answer == "0")
-        AddNewMovieToLibrary();
+        await AddNewMovieToLibrary();
     else
-        ManageMovie(libraryMovies[Convert.ToInt32(answer) - 1]);   
+        await ManageMovie(libraryMovies[Convert.ToInt32(answer) - 1]);   
 }
 
-void AddNewMovieToLibrary()
+async Task AddNewMovieToLibrary()
 {
     string addNewMovie = InterogateUser("Add new movie series to library?(Y/N):", new List<string> { "Y", "N" });
     while (addNewMovie.ToUpper() == "Y")
@@ -160,7 +161,7 @@ void AddNewMovieToLibrary()
 
 
     List<Movie> libraryMovies = movieLibrary.GetLibraryMovies();
-    ChooseWhatToDo(libraryMovies);    
+    await ChooseWhatToDo(libraryMovies);    
 }
 
 string InterogateUser(string question, List<string> validAnswers)
@@ -204,14 +205,14 @@ async Task ManageCurrentPlayback()
         //reset
         vlcCommunicationRetryCount = 0;
 
-        if (currentTime > maxLength - 20)//20 seconds left jump to next episode
+        if (currentTime > maxLength - 10)//10 seconds left jump to next episode
         {
             moviePlayer.Stop();
             string episodeCode = movieLibrary.GetNextEpisode(currentMovie);
             LastEpisodePlayed lastEpisodePlayed = new LastEpisodePlayed() { Episode = episodeCode, Time = 0 };
             currentMovie.LastEpisodePlayed = lastEpisodePlayed;
             movieLibrary.UpdateLastEpisodePlayed(currentMovie);
-            CheckAndPlayEpisode(currentMovie);
+            await CheckAndPlayEpisode(currentMovie);
         }
         else
         {
@@ -228,7 +229,7 @@ async Task ManageCurrentPlayback()
 async Task StartPeriodicVlcStatusCheck()
 {
     if (vlcCheckStatusRunning)//same task already running
-        return;
+        return;    
 
     cancellationTokenSource = new CancellationTokenSource();
     CancellationToken token = cancellationTokenSource.Token;
