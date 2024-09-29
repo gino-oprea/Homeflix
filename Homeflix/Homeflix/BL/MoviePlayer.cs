@@ -18,7 +18,7 @@ namespace Homeflix.BL
 
         public void Play(string videoPath, int startTimeSeconds)
         {
-            string arguments = $"\"{videoPath}\" --start-time={startTimeSeconds}";
+            string arguments = $"\"{videoPath}\" --start-time={startTimeSeconds} --fullscreen";
             vlcProcess = Process.Start(vlcPlayerPath, arguments);
         }
 
