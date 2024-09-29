@@ -88,7 +88,7 @@ void PlayEpisode(Movie movie)
             moviePlayer.Play(movie.Seasons[seasonIndex].Episodes[episodeIndex].Path, movie.LastEpisodePlayed.Time);
 
             Thread.Sleep(1000);
-            StartPeriodicTask();
+            StartPeriodicVlcStatusCheck();
         }
         else
         {
@@ -106,7 +106,7 @@ void PlayEpisode(Movie movie)
         Console.WriteLine($"Playing {movie.Name} {movie.Seasons[0].Name} {movie.Seasons[0].Episodes[0].Name}");
         moviePlayer.Play(movie.Seasons[0].Episodes[0].Path, 0);
         Thread.Sleep(1000);
-        StartPeriodicTask();
+        StartPeriodicVlcStatusCheck();
     }
 
     currentMovie = movie;
@@ -239,7 +239,7 @@ async Task ManageCurrentPlayback()
 }
 
 
-async Task StartPeriodicTask()
+async Task StartPeriodicVlcStatusCheck()
 {
     cancellationTokenSource = new CancellationTokenSource();
     CancellationToken token = cancellationTokenSource.Token;
@@ -256,7 +256,7 @@ async Task StartPeriodicTask()
     }
     catch (TaskCanceledException)
     {
-        Console.WriteLine("Periodic task was canceled.");
+        Console.WriteLine("Periodic vlc status check was canceled.");
     }
     finally
     {
