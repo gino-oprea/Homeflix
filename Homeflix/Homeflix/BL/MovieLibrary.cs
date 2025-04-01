@@ -138,9 +138,8 @@ namespace Homeflix.BL
                 // Add the season to the movie's list of seasons
                 movie.Seasons.Add(season);
             }
-
-            int movieId = playerConfig.Movies.Count;
-            movie.Id = movieId;
+            
+            movie.Id = Guid.NewGuid().ToString();
 
             playerConfig.Movies.Add(movie);
             UpdateConfig();                        
